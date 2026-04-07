@@ -129,6 +129,29 @@
                 button.classList.remove("stop");
             }
         }
+
+        const messageEl = document.getElementById("message");
+        if (topClass.className === "Yolo" && topClass.probability > 0.85) {
+            messageEl.textContent = "Hello!";
+        } else {
+            messageEl.textContent = "";
+        }
+
+        const box = document.getElementById("box");
+        if (topClass.className === "Jesse" && topClass.probability > 0.7) {
+            box.style.transform = "translateX(-100px)";
+        } else if (topClass.className === "Kim" && topClass.probability > 0.7) {
+            box.style.transform = "translateX(100px)";
+        } else {
+            box.style.transform = "translateX(0)";
+        }
     </script>
+    <div id="message">
+        
+    </div>
+
+    <div id="box">
+        
+    </div>
 </body>
 </html>
