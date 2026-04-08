@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Don't Laugh Reaction Challenge</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+
+         h1 {
+            margin-bottom: 0.5rem;
+        }
+
+        #game-info {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+
+        #webcam-container canvas {
+            display: none;
+            border-radius: 8px;
+        }
+        #webcam-container.active canvas {
+            display: block;
+        }
+        #label-container div {
+            font-size: 1.1rem;
+            padding: 0.25rem 0;
+        }
+        button {
+            padding: 0.6rem 1.5rem;
+            font-size: 1rem;
+            cursor: pointer;
+            border-radius: 6px;
+            border: none;
+            color: white;
+            background: #2563eb;
+            margin: 1rem 0;
+        }
+        button.stop { background: #dc2626; }
+        button:hover { opacity: 0.9; }
+
+         #reaction-image {
+            width: 100%;
+            max-width: 350px;
+            height: 350px;
+            object-fit: cover;
+            border-radius: 10px;
+            border: 3px solid #ddd;
+        }
+
+        #label-container div {
+            font-size: 1.05rem;
+            padding: 0.25rem 0;
+        }
+
+        #message {
+            font-size: 1.4rem;
+            font-weight: bold;
+            margin-top: 1rem;
+            min-height: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>Don't Laugh Reaction Challenge</h1>
+    <p>Stay serious while the images change every 5 seconds.</p>
+
+     <div id="game-info">
+        <div>Score: <span id="score">0</span></div>
+        <div>Time Left: <span id="timer">15</span>s</div>
+    </div>
+
+    <button id="toggleButton" onclick="toggleCamera()">Start Game</button>
+
+    <div id="main-area">
+        <div id="webcam-container"></div>
+        <div id="label-container"></div>
+    </div>
+
+     <div id="image-section">
+            <img id="reaction-image" src="image1.png" alt="Reaction image">
+        </div>
+    </div>
+
+    <div id="message"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+    <script>
+        // REPLACE THIS with your model URL from Teachable Machine:
+        const URL = "https://teachablemachine.withgoogle.com/models/8_Gd57401/";
+
+         const images = [
+            "image1.png",
+            "image2.png",
+            "image3.png"
+        ];
+
+        let model, webcam, labelContainer, maxPredictions;
+        let isRunning = false;
+        let gameOver = false;
+
+        let score = 0;
+        let totalTime = 15;
+        let timeLeft = 15;
+        let currentImageIndex = 0;
+
+        let countdownInterval = null;
+        let imageInterval = null;
+
+        let laughingStartTime = null;
+        const laughingThreshold = 500; // 0.5 seconds
+
+        async function init() {
+            model = await tmImage.load(URL + "model.json", URL + "metadata.json");
+            maxPredictions = model.getTotalClasses();
+
+            webcam = new tmImage.Webcam(300, 300, true);
+            await webcam.setup();
+            await webcam.play();
+
+            const container = document.getElementById("webcam-container");
+            container.innerHTML = "";
+            container.appendChild(webcam.canvas);
+            container.classList.add("active");
+
+            labelContainer = document.getElementById("label-container");
+            labelContainer.innerHTML = "";
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+
+            score = 0;
+            timeLeft = totalTime;
+            currentImageIndex = 0;
+            gameOver = false;
+            laughingStartTime = null;
+
+            document.getElementById("score").textContent = score;
+            document.getElementById("timer").textContent = timeLeft;
+            document.getElementById("message").textContent = "Keep a straight face!";
+            document.getElementById("reaction-image").src = images[currentImageIndex];
+            document.body.style.backgroundColor = "white";
+
+            startGameTimers();
+
+            gameOver = false;
+            isRunning = true;
+            window.requestAnimationFrame(loop);
+        }
+
+           function startGameTimers() {
+            clearInterval(countdownInterval);
+            clearInterval(imageInterval);
+
+            countdownInterval = setInterval(() => {
+                if (!isRunning || gameOver) return;
+
+                timeLeft--;
+                document.getElementById("timer").textContent = timeLeft;
+
+                if (timeLeft <= 0) {
+                    winGame();
+                }
+            }, 1000);
+
+            imageInterval = setInterval(() => {
+                if (!isRunning || gameOver) return;
+
+                score++;
+                document.getElementById("score").textContent = score;
+
+                currentImageIndex++;
+
+                if (currentImageIndex < images.length) {
+                    document.getElementById("reaction-image").src = images[currentImageIndex];
+                }
+            }, 5000);
+        }
+
+
+        async function loop() {
+            if (!isRunning) return;
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        async function predict() {
+            if (gameOver) return;
+            const prediction = await model.predict(webcam.canvas);
+
+            // Find the class with the highest probability
+            let topClass = prediction[0];
+            for (let i = 1; i < prediction.length; i++) {
+                if (prediction[i].probability > topClass.probability) {
+                    topClass = prediction[i];
+                }
+            }
+
+            // topClass.className is the winning label
+            // topClass.probability is how confident the model is
+            console.log(topClass.className, topClass.probability);
+
+            // Update the display
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            const messageEl = document.getElementById("message");
+
+            if (topClass.className === "Straightface" && topClass.probability > 0.8) {
+            document.body.style.backgroundColor = "#d1fae5";
+            messageEl.textContent = "Good job. Stay serious.";
+        } 
+        else if (topClass.className === "HalfSmile" && topClass.probability > 0.8) {
+            document.body.style.backgroundColor = "#fef3c7";
+            messageEl.textContent = "Warning... you're starting to smile!";
+        } 
+        else if (topClass.className === "Laughing" && topClass.probability > 0.8) {
+            document.body.style.backgroundColor = "#fecaca";
+            messageEl.textContent = "You laughed. You lose!";
+              if (laughingStartTime === null) {
+                    laughingStartTime = Date.now();
+                } else {
+                    const laughingDuration = Date.now() - laughingStartTime;
+                    if (laughingDuration >= laughingThreshold) {
+                        loseGame();
+                    }
+                }
+        } 
+        else if (topClass.className === "Background" && topClass.probability > 0.8) {
+            document.body.style.backgroundColor = "#e5e7eb";
+            messageEl.textContent = "Face not detected. Get in frame.";
+            laughingStartTime = null;
+        } 
+        else {
+            document.body.style.backgroundColor = "white";
+            messageEl.textContent = "Reading expression...";
+            laughingStartTime = null;
+            }
+        }
+
+        function loseGame() {
+            gameOver = true;
+            isRunning = false;
+            clearInterval(countdownInterval);
+            clearInterval(imageInterval);
+            webcam.stop();
+
+            document.body.style.backgroundColor = "#f87171";
+            document.getElementById("message").textContent =
+                "You laughed. You lose! Final Score: " + score;
+
+            document.getElementById("toggleButton").textContent = "Start Game";
+            document.getElementById("toggleButton").classList.remove("stop");
+            document.getElementById("webcam-container").classList.remove("active");
+        }
+
+         function winGame() {
+            gameOver = true;
+            isRunning = false;
+            clearInterval(countdownInterval);
+            clearInterval(imageInterval);
+            webcam.stop();
+
+            document.body.style.backgroundColor = "#86efac";
+            document.getElementById("message").textContent =
+                "You survived! Final Score: " + score;
+
+            document.getElementById("toggleButton").textContent = "Start Game";
+            document.getElementById("toggleButton").classList.remove("stop");
+            document.getElementById("webcam-container").classList.remove("active");
+        }
+
+        async function toggleCamera() {
+            const button = document.getElementById("toggleButton");
+            if (!isRunning) {
+                await init();
+                button.textContent = "Stop Game";
+                button.classList.add("stop");
+            } else {
+                isRunning = false;
+                gameOver = false;
+
+                clearInterval(countdownInterval)
+                clearInterval(imageInterval);
+
+                webcam.stop();
+                document.getElementById("webcam-container").classList.remove("active");
+                document.body.style.backgroundColor = "white";
+                document.getElementById("message").textContent = "";
+                document.getElementById("score").textContent = "0";
+                document.getElementById("timer").textContent = totalTime;
+
+                button.textContent = "Start Game";
+                button.classList.remove("stop");
+            }
+        }
+
+    </script>       
+    </div>
+</body>
+</html>
