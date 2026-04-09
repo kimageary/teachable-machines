@@ -150,15 +150,22 @@
 
             document.getElementById("score").textContent = score;
             document.getElementById("timer").textContent = timeLeft;
+            const img = document.getElementById("reaction-image");
+            img.style.display = "none"; // hide image at start
+            document.getElementById("message").textContent = "Get ready...";
             document.getElementById("message").textContent = "Keep a straight face!";
-            document.getElementById("reaction-image").src = images[currentImageIndex];
             document.body.style.backgroundColor = "white";
 
-            startGameTimers();
+            setTimeout(() => {
+                img.style.display = "block"; // show image after delay
+                img.src = images[currentImageIndex];
 
-            gameOver = false;
-            isRunning = true;
-            window.requestAnimationFrame(loop);
+                document.getElementById("message").textContent = "Go! Stay serious.";
+
+                startGameTimers();
+                isRunning = true;
+                window.requestAnimationFrame(loop);
+            }, 3000);
         }
 
            function startGameTimers() {
