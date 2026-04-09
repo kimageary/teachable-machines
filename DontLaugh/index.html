@@ -58,6 +58,7 @@
             object-fit: cover;
             border-radius: 10px;
             border: 3px solid #ddd;
+            transition: transform 0.5s ease, opacity 0.5s ease;
         }
 
         #label-container div {
@@ -70,6 +71,12 @@
             font-weight: bold;
             margin-top: 1rem;
             min-height: 2rem;
+        }
+        #main-area{
+            display: flex;
+        }
+        .hidden{
+            display: none;
         }
     </style>
 </head>
@@ -85,13 +92,13 @@
     <button id="toggleButton" onclick="toggleCamera()">Start Game</button>
 
     <div id="main-area">
-        <div id="webcam-container"></div>
         <div id="label-container"></div>
-    </div>
+        <div id="webcam-container"></div>
 
-     <div id="image-section">
+        <div id="image-section" class="hidden">
             <img id="reaction-image" src="image1.png" alt="Reaction image">
         </div>
+    
     </div>
 
     <div id="message"></div>
@@ -102,11 +109,22 @@
         // REPLACE THIS with your model URL from Teachable Machine:
         const URL = "https://teachablemachine.withgoogle.com/models/8_Gd57401/";
 
-         const images = [
+         let images = [
             "image1.png",
             "image2.png",
             "image3.png"
         ];
+
+        async function loadMemes() {
+            try {
+                // Yes exposing API keys is bad - no I am not concerned about a freely generated humor API key
+                const res = await fetch(`https://api.humorapi.com/memes/search?number=10&api-key=2dbd89ae342d4e339bac2a3a4d46b527`);
+                const data = await res.json();
+                images = data.memes.map(meme => meme.url);
+            } catch (err) {
+                console.error("Meme API failed, using fallback images:", err);
+            }
+        }
 
         let model, webcam, labelContainer, maxPredictions;
         let isRunning = false;
@@ -121,7 +139,7 @@
         let imageInterval = null;
 
         let laughingStartTime = null;
-        const laughingThreshold = 500; // 0.5 seconds
+        const laughingThreshold = 2500; // 0.5 seconds
 
         async function init() {
             model = await tmImage.load(URL + "model.json", URL + "metadata.json");
@@ -151,21 +169,20 @@
             document.getElementById("score").textContent = score;
             document.getElementById("timer").textContent = timeLeft;
             const img = document.getElementById("reaction-image");
-            img.style.display = "none"; // hide image at start
             document.getElementById("message").textContent = "Get ready...";
             document.getElementById("message").textContent = "Keep a straight face!";
             document.body.style.backgroundColor = "white";
 
-            setTimeout(() => {
-                img.style.display = "block"; // show image after delay
-                img.src = images[currentImageIndex];
+            await loadMemes();
+            document.getElementById("image-section").classList.remove("hidden")
+            img.src = images[currentImageIndex];
 
-                document.getElementById("message").textContent = "Go! Stay serious.";
+            document.getElementById("message").textContent = "Go! Stay serious.";
 
-                startGameTimers();
-                isRunning = true;
-                window.requestAnimationFrame(loop);
-            }, 3000);
+            startGameTimers();
+            isRunning = true;
+            window.requestAnimationFrame(loop);
+
         }
 
            function startGameTimers() {
@@ -189,11 +206,9 @@
                 score++;
                 document.getElementById("score").textContent = score;
 
-                currentImageIndex++;
+                currentImageIndex = (currentImageIndex + 1) % images.length;
 
-                if (currentImageIndex < images.length) {
-                    document.getElementById("reaction-image").src = images[currentImageIndex];
-                }
+                document.getElementById("reaction-image").src = images[currentImageIndex];
             }, 5000);
         }
 
@@ -233,10 +248,12 @@
             if (topClass.className === "Straightface" && topClass.probability > 0.8) {
             document.body.style.backgroundColor = "#d1fae5";
             messageEl.textContent = "Good job. Stay serious.";
+            laughingStartTime = null;
         } 
         else if (topClass.className === "HalfSmile" && topClass.probability > 0.8) {
             document.body.style.backgroundColor = "#fef3c7";
             messageEl.textContent = "Warning... you're starting to smile!";
+            laughingStartTime = null;
         } 
         else if (topClass.className === "Laughing" && topClass.probability > 0.8) {
             document.body.style.backgroundColor = "#fecaca";
@@ -319,7 +336,6 @@
             }
         }
 
-    </script>       
-    </div>
+    </script>
 </body>
 </html>
